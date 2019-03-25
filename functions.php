@@ -71,8 +71,12 @@ function placeOrder($ch, $productId, $qty, $price){
 	$url = 'https://trader.degiro.nl/trading/secure/v5/checkOrder;jsessionid=' . sessionId . '?intAccount=' . intAccount . '&sessionId=' . sessionId;
 	$postParams = '{"buySell":"SELL","orderType":0,"productId":"' . $productId . '","timeType":1,"size":' . $qty . ',"price":' . $price . '}';
 
+	$headers[] = 'Content-Type: application/json;charset=UTF-8';
+	$headers[] = 'Accept: application/json, text/plain, */*';
+
 	curl_setopt_array($ch, [
 		CURLOPT_URL				=> $url,
+		CURLOPT_HTTPHEADER		=> $headers,
 		CURLOPT_POST			=> true,
 		CURLOPT_POSTFIELDS		=> $postParams,
 	]);
@@ -87,12 +91,13 @@ function placeOrder($ch, $productId, $qty, $price){
 		$confirmationId = $result['confirmationId'];
 		confirmOrder($ch, $confirmationId, $postParams, $productId, $qty);
 	}else{
+		echo "Error placing order, check result\n";
 		var_dump($result);
 	}
 }
 
 function confirmOrder($ch, $confirmationId, $postParams, $productId, $qty){
-	global $runFile, $selling;
+	//global $runFile, $selling;
 	$url = 'https://trader.degiro.nl/trading/secure/v5/order/' . $confirmationId . ';jsessionid=' . sessionId . '?intAccount=' . intAccount . '&sessionId=' . sessionId;
 	curl_setopt_array($ch, [
 		CURLOPT_URL				=> $url,
@@ -105,8 +110,12 @@ function confirmOrder($ch, $confirmationId, $postParams, $productId, $qty){
 		die("invalid json\n");
 	}
 	$result = json_decode($result, true);
+	if(isset($result['errors'])){
+		echo "Error confirming order, check result\n";
+	}
 	var_dump($result);
 	if($result['status'] == 0){
+		/*
 		$wrote = 0;
 		foreach($selling as $k => $v){
 			if($v['productId'] == $productId){
@@ -119,6 +128,7 @@ function confirmOrder($ch, $confirmationId, $postParams, $productId, $qty){
 		}else{
 			file_put_contents($runFile, "ERROR: could not find $productId" . json_encode($selling));
 		}
+		*/
 	}
 }
 
@@ -245,10 +255,13 @@ function checkProspects($ch, $zone){
 		$url = "https://trader.degiro.nl/product_search/secure/v5/stocks?stockCountryId=954&&offset=0&limit=500&requireTotal=true&sortColumns=name&sortTypes=asc&intAccount=$intAccount&sessionId=$sessionId";
 	}
 	curl_setopt_array($ch, [
-		CURLOPT_URL	=> $url
+		CURLOPT_URL		=> $url,
+		CURLOPT_POST	=> false,
 	]);
 	$result = curl_exec($ch);
 	$result = json_decode($result,true);
+	#var_dump($url);
+	#var_dump($result);
 
 	#var_dump($result);
 	foreach($result['products'] as $p){
@@ -277,10 +290,11 @@ function checkProspects($ch, $zone){
 		$highP = $info['highPrice'];
 		$last = $info['last'];
 		$trNr = $info['trNr'];
+		$avg = $info['avg'];
 
 		if($last > 0 && $lowP > 0 && $info['lowPrice']){
 			$diff = $highP - $lowP;
-			echo "$diff|$trNr|" . $v['name'] . "|$lowP|$highP\n";
+			echo "$diff|$trNr|$avg|" . $v['name'] . "|$lowP|$highP\n";
 		}
 	}
 }
@@ -334,55 +348,26 @@ function getTradingInfo($ch, $issueId){
 	$result = curl_exec($ch);
 	$result = json_decode($result,true);
 
-	// series analysis
-	/*
-	$start	= $result['start'];
-	$end	= $result['end'];
-	$now	= (time() - strtotime($start))/60;
-	if(!isset($result['series'][1]['data'])){
-		return array();
-	}
-
-	$samples = array();
-	$labels = array();
-
-	foreach($result['series'][1]['data'] as $k => $v){
-        $v0 = $v[0];
-        $v1 = $v[1];
-        $samples[] = array($v0);
-        $labels[] = $v1;
-
-	}
-
-	if(count($samples) < 2 || count($labels) < 2){
-		$p1 = 0;
-		$p2 = 0;
-		$prev = 0;
-		$last = 0;
-	}else{
-		$prev = array_slice($result['series'][1]['data'], -2, 1)[0][1];
-		$last = array_slice($result['series'][1]['data'], -1)[0][1];
-
-		$c = new LeastSquares();
-		$c->train($samples, $labels);
-
-		#$n = new NaiveBayes();
-		$n = new SVR(Kernel::RBF, 3, 0.2, 999999, null, 0.0, 0.001, 1000, true);
-		$n->train($samples, $labels);
-
-		$p1 = $c->predict([$now]);
-		$p2 = $n->predict([$now]);
-
-		$p1 = round($p1, 4);
-		$p1 = $p1 * 10000;
-		$p1 = $p1 - ($p1 % 5);
-		$p1 = $p1 / 10000;
-	}
-	*/
-
 	$prev = 0;
 	$last = 0;
-	$trNr = count($result['series'][1]['data']); // trading volume today
+	if(isset($result['series'][1]['data'])){
+		$trNr = count($result['series'][1]['data']); // trading volume today
+	}else{
+		return array();
+		$trNr = 0;
+	}
+
+	foreach($result['series'][1]['data'] as $k => $v){
+		$v0 = $v[0];
+		$v1 = $v[1];
+		$samples[] = array($v0);
+		$labels[] = $v1;
+	}
+	if($trNr > 1)
+		$avg = array_sum(array_filter($labels))/$trNr;
+	else
+		$avg = 0;
+
 	if($trNr > 1){
 		$prev = array_slice($result['series'][1]['data'], -2, 1)[0][1];
 		$last = array_slice($result['series'][1]['data'], -1)[0][1];
@@ -400,37 +385,9 @@ function getTradingInfo($ch, $issueId){
 		'prev'		=> $prev,
 		'last'		=> $last,
 		'trNr'		=> $trNr,
+		'avg'		=> $avg,
 	);
 
-	// search productId
-	/*
-	$url = productSearchUrl . 'v5/products/lookup?searchText=' . $searchText . '&limit=7&intAccount=' . intAccount . '&sessionId=' . sessionId;
-	curl_setopt_array($ch, [
-		CURLOPT_URL	=> $url
-	]);
-
-	$result = curl_exec($ch);
-	if($result != json_decode(json_encode($result), true)){
-			die("invalid json\n");
-	}
-	$result = json_decode($result, true);
-
-	foreach ($result['products'] as $key => $product){
-		if(!isset($product['vwdId']))
-			continue;
-
-		if($product['vwdId'] == $issueId){
-			$productId = $product['id'];
-			break;
-		}
-	}
-
-	if(!$productId){
-		echo date('Y-m-d H:i:s') . "|could not find issueId $issueId with searchText $searchText in url: $url\n";
-		die();
-	}
-	$ret['productId'] = $productId;
-	*/
 
 	return $ret;
 }
