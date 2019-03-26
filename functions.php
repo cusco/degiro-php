@@ -38,9 +38,9 @@ function trySell($ch, $p, $trySell){
 		echo "|no data\n";
 		return;
 	}
-	if($prev > $last){	// still rising, lets wait
+	if($last > $prev){	// still rising, lets wait
 		if($debug){
-			echo "|$prev > $last... still rising, skipping\n";
+			echo "|$last > $prev ... still rising, skipping\n";
 			return;
 		}
 	}
@@ -139,6 +139,10 @@ function updatePortfolio($ch){
 	$intAccount = intAccount;
 	$sessionId = sessionId;
 	$cookieFile = $config['cookieFile'];
+	#$force=0;
+	
+	$i=0;
+	start:
 
 	$header = array(
 		 'authority: trader.degiro.nl'
@@ -164,6 +168,23 @@ function updatePortfolio($ch){
 		CURLOPT_ENCODING		=> '',
 	]);
 	$result = curl_exec($ch);
+	$info = curl_getinfo($ch);
+	if($info['http_code'] != 200 && $info['http_code'] != 201){
+		echo "error getting portfolio.. lets use cache (or remove cookie file to reload)\n";
+		var_dump($info);
+		var_dump($result);
+		var_dump($sessionId);
+		var_dump($url);
+		die();
+		#if($force && $i <3){
+		#	$i++;
+		#	webLogin($ch, $force);
+		#	goto start;
+		#}else{
+		#	// lets use cache for now
+			$result = file_get_contents(__DIR__ . '/portfolio.json'); 
+		#}
+	}
 	$result = json_decode($result,true);
 	$portfolio = array();
 	$cash = false;
@@ -211,8 +232,10 @@ function updatePortfolio($ch){
 	//	$portfolio["$k"]['isin'] = $productInfo['data']["$k"]['isin'];
 	}
 
-	//$portfolio = json_encode($portfolio, JSON_PRETTY_PRINT);
-	//file_put_contents(__DIR__ . '/portfolio.json', json_encode($portfolio, JSON_PRETTY_PRINT));
+	#if($force){
+		$cache = json_encode($portfolio, JSON_PRETTY_PRINT);
+		file_put_contents(__DIR__ . '/portfolio.json', json_encode($cache, JSON_PRETTY_PRINT));
+	#}
 
 	return $portfolio;
 }
@@ -372,6 +395,11 @@ function getTradingInfo($ch, $issueId){
 		$prev = array_slice($result['series'][1]['data'], -2, 1)[0][1];
 		$last = array_slice($result['series'][1]['data'], -1)[0][1];
 	}
+	#var_dump($url);
+	#var_dump($result['series'][1]['data']);
+	#echo "prev: $prev\n";
+	#echo "last: $last\n";
+
 
 	$ret = array(
 		'quality'	=> $result['series'][0]['data']['quality'],
@@ -450,6 +478,9 @@ function webLogin($ch){
 
 	global $config;
 	$cookieFile = $config['cookieFile'];
+	#if($force){
+	#	unlink($cookieFile);
+	#}
 	if(!file_exists($cookieFile)){
 		touch($cookieFile);
 	}
@@ -519,8 +550,8 @@ function webLogin($ch){
 		]);
 		$result = curl_exec($ch);
 		$info = curl_getinfo($ch);
-		var_dump($info);
-		var_dump($result);
+		#var_dump($info);
+		#var_dump($result);
 	}
 	return $info['http_code'];
 }
