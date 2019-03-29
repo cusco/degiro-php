@@ -29,7 +29,8 @@ function trySell($ch, $p, $trySell){
 	$trySellUn	= normalizeFloat($trySell/$qty, 4);
 
 	if($debug){
-		echo date('Y-m-d H:i:s') . "|Checking order $symbol trying to sell at $trySell ($trySellUn), ($trNr transactions today)";
+		$xCost = normalizeFloat($cost,4);
+		echo date('Y-m-d H:i:s') . "|$symbol \ttrying to sell at $trySell ($trySellUn, costed $xCost), ($trNr variations)";
 	}
 
 	#echo "forecast $text: $last, f1: $forecast1, f2: $forecast2|" . round(($forecast1 - $last),4) . "\n";
@@ -135,14 +136,6 @@ function confirmOrder($ch, $confirmationId, $postParams, $productId, $qty){
 
 function updatePortfolio($ch){
 	global $config;
-	$userToken = clientId;
-	$intAccount = intAccount;
-	$sessionId = sessionId;
-	$cookieFile = $config['cookieFile'];
-	#$force=0;
-	
-	$i=0;
-	start:
 
 	$header = array(
 		 'authority: trader.degiro.nl'
@@ -155,14 +148,14 @@ function updatePortfolio($ch){
 		,'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'
 	);
 
-	$url = tradingUrl . "v5/update/$intAccount;jsessionid=$sessionId?portfolio=0";
+	$url = $config['tradingUrl'] . "v5/update/" . $config['intAccount'] . ";jsessionid=" . $config['sessionId'] . "?portfolio=0";
 
 	curl_setopt_array($ch, [
 		CURLOPT_URL				=> $url,
 		CURLOPT_HTTPHEADER		=> $header,
 		CURLOPT_RETURNTRANSFER	=> true,
-		CURLOPT_COOKIEFILE		=> $cookieFile,
-		CURLOPT_COOKIEJAR		=> $cookieFile,
+		CURLOPT_COOKIEFILE		=> $config['cookieFile'],
+		CURLOPT_COOKIEJAR		=> $config['cookieFile'],
 		CURLOPT_POST			=> false,
 		CURLOPT_HTTP_VERSION	=> CURL_HTTP_VERSION_2_0,
 		CURLOPT_ENCODING		=> '',
@@ -171,20 +164,10 @@ function updatePortfolio($ch){
 	$info = curl_getinfo($ch);
 	if($info['http_code'] != 200 && $info['http_code'] != 201){
 		echo "error getting portfolio.. lets use cache (or remove cookie file to reload)\n";
-		var_dump($info);
-		var_dump($result);
-		var_dump($sessionId);
-		var_dump($url);
 		die();
-		#if($force && $i <3){
-		#	$i++;
-		#	webLogin($ch, $force);
-		#	goto start;
-		#}else{
-		#	// lets use cache for now
-			$result = file_get_contents(__DIR__ . '/portfolio.json'); 
-		#}
+		$result = file_get_contents(__DIR__ . '/portfolio.json'); 
 	}
+	
 	$result = json_decode($result,true);
 	$portfolio = array();
 	$cash = false;
@@ -242,11 +225,11 @@ function updatePortfolio($ch){
 
 function getOpenOrders($ch){
 	global $config;
-	$intAccount = intAccount;
-	$sessionId = sessionId;
+	#$intAccount = intAccount;
+	#$sessionId = sessionId;
 	$cookieFile = $config['cookieFile'];
 
-	$url = $url = tradingUrl . "v5/update/$intAccount;jsessionid=$sessionId?orders=0";
+	$url = $url = $config['tradingUrl'] . "v5/update/" . $config['intAccount'] . ";jsessionid=" . $config['sessionId'] . "?orders=0";
 	curl_setopt_array($ch, [
 		CURLOPT_URL				=> $url,
 	]);
@@ -314,25 +297,29 @@ function checkProspects($ch, $zone){
 		$last = $info['last'];
 		$trNr = $info['trNr'];
 		$avg = $info['avg'];
+		$diffAvg = $info['diffAvg'];
 
 		if($last > 0 && $lowP > 0 && $info['lowPrice']){
 			$diff = $highP - $lowP;
-			echo "$diff|$trNr|$avg|" . $v['name'] . "|$lowP|$highP\n";
+			$score = $diffAvg * $trNr;
+			$name = $v['name'];
+			echo "$score|$trNr|$name|$lowP|$highP\n";
+			#echo "$diffAvg|$diff|$trNr|$avg|" . $v['name'] . "|$lowP|$highP\n";
 		}
 	}
 }
 
 function getProductInfo($ch, $productIds){
-
-	$userToken = clientId;
-	$intAccount = intAccount;
-	$sessionId = sessionId;
+	global $config;
+	#$userToken = clientId;
+	#$intAccount = intAccount;
+	#$sessionId = sessionId;
 
 	if(count($productIds) < 1){
 		return array();
 	}
 
-	$url = productSearchUrl . "v5/products/info?intAccount=$intAccount&sessionId=$sessionId";
+	$url = $config['productSearchUrl'] . "v5/products/info?intAccount=" . $config['intAccount'] . "&sessionId=" . $config['sessionId'];
 	$params = '["' . implode('","', $productIds) . '"]';
 
 	$header = array(
@@ -355,13 +342,11 @@ function getProductInfo($ch, $productIds){
 }
 
 function getTradingInfo($ch, $issueId){
-	$userToken = clientId;
-	$intAccount = intAccount;
-	$sessionId = sessionId;
+	global $config;
 
 	$productId = 0;
 
-	$url = "https://charting.vwdservices.com/hchart/v1/deGiro/data.js?requestid=1&resolution=PT1M&culture=en-US&period=P1D&series=issueid:$issueId&series=price:issueid:$issueId&format=json&userToken=$userToken&tz=Europe/Lisbon";
+	$url = "https://charting.vwdservices.com/hchart/v1/deGiro/data.js?requestid=1&resolution=PT1M&culture=en-US&period=P1D&series=issueid:$issueId&series=price:issueid:$issueId&format=json&userToken=" . $config['clientId'] . "&tz=Europe/Lisbon";
 	#$url = "https://charting.vwdservices.com/hchart/v1/deGiro/data.js?requestid=1&resolution=PT1M&culture=en-US&period=P1W&series=issueid:$issueId&series=price:issueid:$issueId&format=json&userToken=$userToken&tz=Europe/Lisbon";
 
 	curl_setopt_array($ch, [
@@ -386,10 +371,19 @@ function getTradingInfo($ch, $issueId){
 		$samples[] = array($v0);
 		$labels[] = $v1;
 	}
-	if($trNr > 1)
+	if($trNr > 1){
 		$avg = array_sum(array_filter($labels))/$trNr;
-	else
+		$ll = array_key_last($labels);
+		foreach($labels as $k => $v){
+			if(($k) != $ll){
+				$diffAvg[] = abs($v - $labels[$k + 1]);
+			}
+		}
+		$diffAvg = array_sum(array_filter($diffAvg))/$ll;
+	}else{
 		$avg = 0;
+		$diffAvg = 0;
+	}
 
 	if($trNr > 1){
 		$prev = array_slice($result['series'][1]['data'], -2, 1)[0][1];
@@ -414,6 +408,7 @@ function getTradingInfo($ch, $issueId){
 		'last'		=> $last,
 		'trNr'		=> $trNr,
 		'avg'		=> $avg,
+		'diffAvg'	=> $diffAvg,
 	);
 
 
@@ -421,6 +416,7 @@ function getTradingInfo($ch, $issueId){
 }
 
 function getDegiroConfig($ch){
+	global $config;
 	$url = 'https://trader.degiro.nl/login/secure/config';
 	$header=array();
 	$cookieFile = __DIR__ . '/cookie.txt';
@@ -451,13 +447,11 @@ function getDegiroConfig($ch){
 
 	$clientId = $result['clientId'];
 
-	define('clientId', $result['clientId']);
-	define('sessionId', $result['sessionId']);
-	define('paUrl', $result['paUrl']);
-	define('productSearchUrl', $result['productSearchUrl']);
-	define('tradingUrl', $result['tradingUrl']);
-	#var_dump($result);
-	$paUrl = paUrl . 'client?sessionId=' . sessionId;
+	foreach($result as $k => $v){
+		$config["$k"] = $v;
+	}
+
+	$paUrl = $config['paUrl'] . 'client?sessionId=' . $config['sessionId'];
 
 	curl_setopt($ch, CURLOPT_URL, $paUrl);
 	$result = curl_exec($ch);
@@ -467,92 +461,113 @@ function getDegiroConfig($ch){
 			die("invalid json\n");
 	}
 	$result = json_decode($result, true);
-
-	define('intAccount', $result['data']['intAccount']);
+	
+	$config['intAccount'] = $result['data']['intAccount'];
+	#define('intAccount', $result['data']['intAccount']);
 	return $info['http_code'];
 
 }
 
-function webLogin($ch){
-	/* also login */
-
+function checkLogin($ch){
+	/*******
+	 * Test access to config, then PaUrl to get clientId, 
+	 * and then portfolio. 
+	 * If any fails, we need to generate a new cookie?
+	 */
 	global $config;
-	$cookieFile = $config['cookieFile'];
-	#if($force){
-	#	unlink($cookieFile);
-	#}
-	if(!file_exists($cookieFile)){
-		touch($cookieFile);
-	}
-	$header = array(
-		 'Origin: https://trader.degiro.nl'
-		,'Accept-Encoding: gzip, deflate, br'
-		,'Accept-Language: en-GB,en;q=0.9,pt-PT;q=0.8,pt;q=0.7'
-		,'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'
-		,'Content-Type: application/json;charset=UTF-8'
-		,'Accept: application/json, text/plain, */*'
-		,'Referer: https://trader.degiro.nl/login/'
-		,'Authority: trader.degiro.nl'
-		,'Dnt: 1'
-	);
 
-	// check if we're still logged in
+	/** Test access to config **/
+	$headers[] = 'Content-Type: application/json;charset=UTF-8';
+	$headers[] = 'Accept: application/json, text/plain, */*';	
 	$url = 'https://trader.degiro.nl/login/secure/config';
 	curl_setopt_array($ch, [
 		CURLOPT_URL				=> $url,
-		CURLOPT_HTTPHEADER		=> $header,
+		CURLOPT_HTTPHEADER		=> $headers,
 		CURLOPT_RETURNTRANSFER	=> true,
-		CURLOPT_COOKIEFILE		=> $cookieFile,
-		CURLOPT_COOKIEJAR		=> $cookieFile,
-		CURLOPT_HTTP_VERSION	=> CURL_HTTP_VERSION_2TLS,
-		CURLOPT_POST			=> false,
-	//	CURLOPT_POSTFIELDS		=> $params,
+		CURLOPT_COOKIEFILE		=> $config['cookieFile'],
+		CURLOPT_COOKIEJAR		=> $config['cookieFile'],
 		CURLOPT_ENCODING		=> '',
 	]);
+	$result = curl_exec($ch);
+	$info = curl_getinfo($ch);
+	if($info['http_code'] != 200 || $result != json_decode(json_encode($result), true))
+		return false;
 
+	$result = json_decode($result, true);
+	foreach($result as $k => $v)
+		$config["$k"] = $v;
+
+	/** get intAccount (clientId) from PaUrl **/
+	$paUrl = $config['paUrl'] . 'client?sessionId=' . $config['sessionId'];
+	curl_setopt($ch, CURLOPT_URL, $paUrl);
+	$result = curl_exec($ch);
+
+	if($info['http_code'] != 200 || $result != json_decode(json_encode($result), true))
+		return false;
+
+	$result = json_decode($result, true);
+	$config['intAccount'] = $result['data']['intAccount'];
+
+	/** Test access to portfolio **/
+	$headers = array('accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8');
+	$url = $config['tradingUrl'] . "v5/update/" . $config['intAccount'] . ";jsessionid=" . $config['sessionId'] . "?portfolio=0";
+	curl_setopt_array($ch, [
+		CURLOPT_URL				=> $url,
+		CURLOPT_HTTPHEADER		=> $headers,
+	]);
+	$result = curl_exec($ch);
+	$info = curl_getinfo($ch);
+	if($info['http_code'] != 200 && $info['http_code'] != 201)
+		return false;
+	
+	return true;
+
+}
+
+function webLogin($ch){
+	global $config;
+	curl_close($ch);
+	unset($ch);
+	$cookieFile = $config['cookieFile'];
+	unlink($cookieFile);
+	$ch = curl_init();
+	if(!file_exists($cookieFile)){
+		touch($cookieFile);
+	}
+
+	// login parameters
+	$username = $config['username'];
+	$password = $config['password'];
+	$params = '{"username":"' . $username . '","password":"' . $password . '","isPassCodeReset":false,"isRedirectToMobile":false,"queryParams":{}}';
+	echo "logging in...\n";
+
+	$url = 'https://trader.degiro.nl/login/secure/login';
+
+	$headers = array();
+	$headers[] = 'Origin: https://trader.degiro.nl';
+	$headers[] = 'Accept-Encoding: gzip, deflate, br';
+	$headers[] = 'Accept-Language: en-GB,en;q=0.9,pt-PT;q=0.8,pt;q=0.7';
+	$headers[] = 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36';
+	$headers[] = 'Content-Type: application/json;charset=UTF-8';
+	$headers[] = 'Accept: application/json, text/plain, */*';
+	$headers[] = 'Referer: https://trader.degiro.nl/login/pt';
+	$headers[] = 'Authority: trader.degiro.nl';
+	$headers[] = 'Dnt: 1';
+
+	curl_setopt_array($ch, [
+		CURLOPT_URL			=> $url,
+		CURLOPT_RETURNTRANSFER		=> true,
+		CURLOPT_HTTPHEADER		=> $headers,
+		CURLOPT_COOKIEFILE		=> $cookieFile,
+		CURLOPT_COOKIEJAR		=> $cookieFile,
+		CURLOPT_POST			=> true,
+		CURLOPT_POSTFIELDS		=> $params,
+		CURLOPT_ENCODING		=> '',
+		//CURLINFO_HEADER_OUT		=> 1, // debug
+	]);
 	$result = curl_exec($ch);
 	$info = curl_getinfo($ch);
 
-
-	if($info['http_code'] != 200){ // We need to login now
-		curl_close($ch); // for some reason...
-		$ch = curl_init();
-
-		// login parameters
-		$username = $config['username'];
-		$password = $config['password'];
-		$params = '{"username":"' . $username . '","password":"' . $password . '","isPassCodeReset":false,"isRedirectToMobile":false,"queryParams":{}}';
-		echo "logging in...\n";
-
-		$url = 'https://trader.degiro.nl/login/secure/login';
-
-		$headers = array();
-		$headers[] = 'Origin: https://trader.degiro.nl';
-		$headers[] = 'Accept-Encoding: gzip, deflate, br';
-		$headers[] = 'Accept-Language: en-GB,en;q=0.9,pt-PT;q=0.8,pt;q=0.7';
-		$headers[] = 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36';
-		$headers[] = 'Content-Type: application/json;charset=UTF-8';
-		$headers[] = 'Accept: application/json, text/plain, */*';
-		$headers[] = 'Referer: https://trader.degiro.nl/login/pt';
-		$headers[] = 'Authority: trader.degiro.nl';
-		$headers[] = 'Dnt: 1';
-
-		curl_setopt_array($ch, [
-			CURLOPT_URL			=> $url,
-			CURLOPT_RETURNTRANSFER		=> true,
-			CURLOPT_HTTPHEADER		=> $headers,
-			CURLOPT_COOKIEFILE		=> $cookieFile,
-			CURLOPT_COOKIEJAR		=> $cookieFile,
-			CURLOPT_POST			=> true,
-			CURLOPT_POSTFIELDS		=> $params,
-			CURLOPT_ENCODING		=> '',
-			//CURLINFO_HEADER_OUT		=> 1, // debug
-		]);
-		$result = curl_exec($ch);
-		$info = curl_getinfo($ch);
-		#var_dump($info);
-		#var_dump($result);
-	}
 	return $info['http_code'];
 }
 
@@ -577,4 +592,14 @@ function normalizeFloat($value, $tick){
 
 	return $value;
 
+}
+
+if (! function_exists("array_key_last")) {
+    function array_key_last($array) {
+        if (!is_array($array) || empty($array)) {
+            return NULL;
+        }
+        
+        return array_keys($array)[count($array)-1];
+    }
 }
