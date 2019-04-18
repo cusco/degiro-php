@@ -50,13 +50,14 @@ function trySell($ch, $p, $trySell){
 	if($trySell <= $totalLast){ // at least 1€ for comissions
 		if($debug)
 			echo "|lastPrice $lastPrice ($totalLast) - placing order!!\n";
-		else
-			$sellingPrice = max($lastPrice, $trySellUn);
-			echo date('Y-m-d H:i:s') . "|Placing order for $text to sell at $trySell ($qty * $sellingPrice)\n";
-			placeOrder($ch, $productId, $qty, $sellingPrice);
+
+		$sellingPrice = max($lastPrice, $trySellUn);
+		echo date('Y-m-d H:i:s') . "|Placing order for $text to sell at $trySell ($qty * $sellingPrice)\n";
+		placeOrder($ch, $productId, $qty, $sellingPrice);
 	}else{
 		if($debug)
 			echo "|not high enough to sell. lastPrice $lastPrice ($totalLast) diff: $diff\n";
+
 		#echo date('Y-m-d H:i:s') . "|$text not high enough to sell ($lastPrice) ($diff)\n";
 	}
 
