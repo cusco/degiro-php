@@ -1,3 +1,14 @@
+PHP implementation og DEGIRO api
+================================
+
+### Set of functions, that anyone can use to interact with degiro programatically via PHP
+
+###### See file functions.php for the list of available functions.
+###### See periodic.php as an example of calling specific functions with a specific logic (sell whenever there is a 5% proffit)
+
+______
+Instructions
+------------
 Edit config.php with your credentials
 
 use functions from functions.php
@@ -13,4 +24,4 @@ run on the command line:
 php -q periodic.php
 
 
-Needs php-curl
+Note: Needs php-curl (apt install php-curl)
