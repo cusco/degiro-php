@@ -1,7 +1,8 @@
-PHP implementation og DEGIRO api
+PHP implementation of DEGIRO api
 ================================
 
 ### Set of functions, that anyone can use to interact with degiro programatically via PHP
+(there is no official degiro API)
 
 ###### See file functions.php for the list of available functions.
 ###### See periodic.php as an example of calling specific functions with a specific logic (sell whenever there is a 5% proffit)
