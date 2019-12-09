@@ -41,7 +41,11 @@ function trySell($ch, $p, $trySell){
 	}
 	if($last > $prev){	// still rising, lets wait
 		if($debug){
-			echo "|$last > $prev ... still rising, skipping\n";
+			if($trySell <= $totalLast){
+				echo "|$last > $prev ... still rising, skipping (would sell)\n";
+			}else{
+				echo "|$last > $prev ... still rising, skipping (would not sell)\n";
+			}
 			return;
 		}
 	}
@@ -65,12 +69,20 @@ function trySell($ch, $p, $trySell){
 
 
 function placeOrder($ch, $productId, $qty, $price){
+	global $config;
+
 	#$productId = 4876499;
 	#$qty = 15;
 	#$price = (float)3.5;
 	$price = (float) $price;
 
-	$url = 'https://trader.degiro.nl/trading/secure/v5/checkOrder;jsessionid=' . sessionId . '?intAccount=' . intAccount . '&sessionId=' . sessionId;
+	## tmp log
+	$logfile = __DIR__ . '/placing_orders.txt';
+	$log = time() . "|$productId|$qty|$price\n";
+	file_put_contents($logfile, $log, FILE_APPEND);
+
+	$url = $config['tradingUrl'] . 'v5/checkOrder' . ';jsessionid=' . $config['sessionId'] . '?intAccount=' . $config['intAccount'] . '&sessionId=' . $config['sessionId'];
+	//$url = 'https://trader.degiro.nl/trading/secure/v5/checkOrder;jsessionid=' . sessionId . '?intAccount=' . intAccount . '&sessionId=' . sessionId;
 	$postParams = '{"buySell":"SELL","orderType":0,"productId":"' . $productId . '","timeType":1,"size":' . $qty . ',"price":' . $price . '}';
 
 	$headers[] = 'Content-Type: application/json;charset=UTF-8';
@@ -253,9 +265,10 @@ function getOpenOrders($ch){
 function checkProspects($ch, $zone){
 	// NASDAQ
 	// https://trader.degiro.nl/product_search/secure/v5/stocks?exchangeId=663&stockCountryId=846&offset=0&limit=500&requireTotal=true&sortColumns=name&sortTypes=asc
-	$userToken = clientId;
-	$intAccount = intAccount;
-	$sessionId = sessionId;
+	global $config;
+	$userToken = $config['clientId'];
+	$intAccount = $config['intAccount'];
+	$sessionId = $config['sessionId'];
 
 	$url = "https://trader.degiro.nl/product_search/secure/v5/stocks?exchangeId=663&stockCountryId=846&offset=0&limit=500&requireTotal=true&sortColumns=name&sortTypes=asc&intAccount=$intAccount&sessionId=$sessionId";
 	if($zone == 'pt'){
@@ -365,6 +378,7 @@ function getTradingInfo($ch, $issueId){
 		return array();
 		$trNr = 0;
 	}
+
 
 	foreach($result['series'][1]['data'] as $k => $v){
 		$v0 = $v[0];
