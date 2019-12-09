@@ -30,7 +30,7 @@
 		echo date('Y-m-d H:i:s') . "|nothing to sell\n";
 		die();
 	}
-	
+
 
 
 	echo date('Y-m-d H:i:s') . "|found $count orders to check...\n";
@@ -43,12 +43,11 @@
 		$comission	= abs($v['realizedProductPl']);
 
 		$totalCost	= (float)($cost * $qty) + ($comission *2); // add another commission for the selling transaction
-		//$trySell 	= $totalCost + 0.05;
-		$trySell 	= $totalCost * 1.05; // 5%
+		$trySell 	= $totalCost * 1.35; // 35% LUCRO
 		$trySell	= normalizeFloat($trySell, 4);	// round
 
 		trySell($ch, $v, $trySell);
-	
+
 	}
-	
-	
+
+
